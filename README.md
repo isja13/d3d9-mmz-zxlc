@@ -2,6 +2,8 @@
 
 Features:
 
+(For use with Zero Collection, remove all D3d10 files in src folder, there only for reference to the original device)
+
 - Let you use [slang-shaders](https://github.com/libretro/slang-shaders) with Capcom's Mega Man X Legacy Collection.
 - Fixes scaling artifact due to nearest-neighbour upscaling.
 
