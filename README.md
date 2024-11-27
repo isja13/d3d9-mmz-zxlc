@@ -13,8 +13,8 @@ Using i686-w64-mingw32-gcc (cross compiling should work too):
 
 ```bash
 # Download source
-git clone https://github.com/xzn/d3d10-mmxlc.git
-cd d3d10-mmxlc
+git clone https://github.com/isja13/d3d9-mmz-zxlc.git
+cd d3d9-mmz-zxlc
 git submodule update --init --recursive
 
 # Create symlinks and patch files
