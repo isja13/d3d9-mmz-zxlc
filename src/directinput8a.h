@@ -3,25 +3,30 @@
 
 #include "main.h"
 #include "unknown.h"
+#include "unknown_impl.h"
+#include "macros.h"  // Include macros.h for IUNKNOWN_DECL
 
 class MyIDirectInput8A : public IDirectInput8A {
     class Impl;
-    Impl *impl;
+    Impl* impl;
 
 public:
     MyIDirectInput8A(
-        IDirectInput8A **inner
+        IDirectInput8A** inner
     );
 
     virtual ~MyIDirectInput8A();
 
     IUNKNOWN_DECL(IDirectInput8A)
 
+    //    IDirectInput8A*& get_inner_ref();
+   // const IDirectInput8A* get_inner_ptr() const;
+
     // IDirectInput8A
 
     virtual HRESULT STDMETHODCALLTYPE CreateDevice(
         REFGUID rguid,
-        LPDIRECTINPUTDEVICE8A *lplpDirectInputDevice,
+        LPDIRECTINPUTDEVICE8A* lplpDirectInputDevice,
         LPUNKNOWN pUnkOuter
     );
 
@@ -68,4 +73,4 @@ public:
     );
 };
 
-#endif
+#endif // DIRECTINPUT8A_H

@@ -5,182 +5,84 @@
 #include "conf.h"
 #include "log.h"
 #include "../minhook/include/MinHook.h"
+#include <tchar.h>
+#include <string.h>
+#include <d3d9.h>
+#include <d3d9types.h>
+#include "globals.h"
 
-#define LOGGER default_logger
 
-#define DEFINE_PROC(r, n, v) \
-    typedef r (__stdcall *n ## _t) v; \
-    n ## _t p ## n; \
-    extern "C" r __stdcall n v
+// Define function pointers
+DirectInput8Create_t pDirectInput8Create = nullptr;
+DllCanUnloadNow_t pDllCanUnloadNow = nullptr;
+DllGetClassObject_t pDllGetClassObject = nullptr;
+DllRegisterServer_t pDllRegisterServer = nullptr;
+DllUnregisterServer_t pDllUnregisterServer = nullptr;
+GetdfDIJoystick_t pGetdfDIJoystick = nullptr;
 
-// dinput8.dll
-
-DEFINE_PROC(HRESULT, DirectInput8Create, (
-    HINSTANCE hinst,
-    DWORD dwVersion,
-    REFIID riidltf,
-    LPVOID *ppvOut,
-    LPUNKNOWN punkOuter
-)) {
-    HRESULT ret = pDirectInput8Create ?
-        pDirectInput8Create(hinst, dwVersion, riidltf, ppvOut, punkOuter) :
-        E_NOTIMPL;
-    LOG_FUN(_,
-        LOG_ARG(hinst),
-        LOG_ARG(dwVersion),
-        LOG_ARG(riidltf),
-        ret
-    );
-
-    if (ret == S_OK) {
-        new MyIDirectInput8A(
-            (IDirectInput8A **)ppvOut
-        );
-    }
-    return ret;
-}
-
-DEFINE_PROC(HRESULT, DllCanUnloadNow, ()) {
-    LOG_FUN();
-    if (pDllCanUnloadNow) {
-        return pDllCanUnloadNow();
-    } else {
-        return E_NOTIMPL;
-    }
-}
-
-DEFINE_PROC(HRESULT, DllGetClassObject, (
-    REFCLSID rclsid,
-    REFIID   riid,
-    LPVOID   *ppv
-)) {
-    LOG_FUN();
-    if (pDllGetClassObject) {
-        return pDllGetClassObject(rclsid, riid, ppv);
-    } else {
-        return E_NOTIMPL;
-    }
-}
-
-DEFINE_PROC(HRESULT, DllRegisterServer, ()) {
-    LOG_FUN();
-    if (pDllRegisterServer) {
-        return pDllRegisterServer();
-    } else {
-        return E_NOTIMPL;
-    }
-}
-
-DEFINE_PROC(HRESULT, DllUnregisterServer, ()) {
-    LOG_FUN();
-    if (pDllUnregisterServer) {
-        return pDllUnregisterServer();
-    } else {
-        return E_NOTIMPL;
-    }
-}
-
-DEFINE_PROC(LPVOID, GetdfDIJoystick, ()) {
-    LOG_FUN();
-    if (pGetdfDIJoystick) {
-        return pGetdfDIJoystick();
-    } else {
-        return NULL;
-    }
-}
-
-// d3d10.dll
-
-DEFINE_PROC(HRESULT, D3D10CreateDeviceAndSwapChain, (
-    IDXGIAdapter         *pAdapter,
-    D3D10_DRIVER_TYPE    DriverType,
-    HMODULE              Software,
-    UINT                 Flags,
-    UINT                 SDKVersion,
-    DXGI_SWAP_CHAIN_DESC *pSwapChainDesc,
-    IDXGISwapChain       **ppSwapChain,
-    ID3D10Device         **ppDevice
-)) {
-    HRESULT ret = E_NOTIMPL;
-    if (pD3D10CreateDeviceAndSwapChain) {
-        ret = pD3D10CreateDeviceAndSwapChain(
-            pAdapter,
-            DriverType,
-            Software,
-            Flags,
-            SDKVersion,
-            pSwapChainDesc,
-            ppSwapChain,
-            ppDevice
-        );
-        if (ret == S_OK) {
-            auto sc = new MyIDXGISwapChain(
-                pSwapChainDesc,
-                ppSwapChain,
-                ppDevice
-            );
-            default_config->hwnd = pSwapChainDesc->OutputWindow;
-            sc->set_overlay(default_overlay);
-            sc->set_config(default_config);
-        }
-    }
-    LOG_FUN(_, ret);
-    return ret;
-}
+// Define global or static variables for these pointers
+IDirect3D9* pD3D9 = nullptr;
+IDirect3DDevice9* pD3D9Device = nullptr;
+bool MinHook_Initialized = false;
 
 namespace {
+    HMODULE base_dll = nullptr;
 
-HMODULE base_dll;
+    // Placeholder for the original Direct3DCreate9 function pointer
+    typedef IDirect3D9* (WINAPI* pDirect3DCreate9)(UINT SDKVersion);
+    pDirect3DCreate9 pOriginalDirect3DCreate9 = nullptr;
 
-bool MinHook_Initialized;
-
-void minhook_init() {
-    if (MH_Initialize() != MH_OK) {
-    } else {
-        MinHook_Initialized = true;
-#define HOOK_PROC(m, n) do { \
-    LPVOID pTarget; \
-    if (MH_CreateHookApiEx( \
-        L ## #m, #n, \
-        (LPVOID)&n, \
-        (LPVOID *)&p ## n, \
-        &pTarget \
-    ) != MH_OK) { \
-    } else { \
-        if (MH_EnableHook(pTarget) != MH_OK) { \
-        } \
-    } \
-} while (0)
-        HOOK_PROC(d3d10, D3D10CreateDeviceAndSwapChain);
+    // Our custom Direct3DCreate9 hook function
+    IDirect3D9* WINAPI HookedDirect3DCreate9(UINT SDKVersion) {
+        // Add any custom logic here
+        return pOriginalDirect3DCreate9(SDKVersion);
     }
-}
 
-void minhook_shutdown() {
-    if (MinHook_Initialized) {
-        if (MH_Uninitialize() != MH_OK) {
+    void minhook_init() {
+        if (MH_Initialize() != MH_OK) {
+            // Initialization failed
         }
-        MinHook_Initialized = false;
+        else {
+            MinHook_Initialized = true;
+            MH_CreateHookApiEx(
+                L"d3d9", "Direct3DCreate9",
+                (LPVOID)&HookedDirect3DCreate9,
+                (LPVOID*)&pOriginalDirect3DCreate9,
+                nullptr
+            );
+            MH_EnableHook(MH_ALL_HOOKS);
+        }
     }
-}
 
+    void minhook_shutdown() {
+        if (MinHook_Initialized) {
+            MH_DisableHook(MH_ALL_HOOKS);
+            MH_Uninitialize();
+            MinHook_Initialized = false;
+        }
+    }
 }
 
 void base_dll_init(HINSTANCE hinstDLL) {
-    UINT len = GetSystemDirectory(NULL, 0);
-    len += _tcslen(BASE_DLL_NAME);
-    TCHAR BASE_DLL_NAME_FULL[len] = {};
-    GetSystemDirectory(BASE_DLL_NAME_FULL, len);
-    _tcscat(BASE_DLL_NAME_FULL, BASE_DLL_NAME);
+    wchar_t BASE_DLL_NAME_FULL[MAX_PATH] = {};
+    UINT len = GetSystemDirectoryW(BASE_DLL_NAME_FULL, MAX_PATH);
+    if (len > 0 && len < MAX_PATH) {
+        wcscat(BASE_DLL_NAME_FULL, BASE_DLL_NAME);
+    }
 
-    base_dll = LoadLibrary(BASE_DLL_NAME_FULL);
+    base_dll = LoadLibraryW(BASE_DLL_NAME_FULL);
     if (!base_dll) {
-    } else if (base_dll == hinstDLL) {
+        // Handle error if needed
+    }
+    else if (base_dll == hinstDLL) {
         FreeLibrary(base_dll);
-        base_dll = NULL;
-    } else {
+        base_dll = nullptr;
+    }
+    else {
 #define LOAD_PROC(n) do { \
-    p ## n = (n ## _t)GetProcAddress(base_dll, #n); \
-} while (0)
+                p ## n = (n ## _t)GetProcAddress(base_dll, #n); \
+            } while (0)
+
         LOAD_PROC(DirectInput8Create);
         LOAD_PROC(DllCanUnloadNow);
         LOAD_PROC(DllGetClassObject);
@@ -196,13 +98,108 @@ void base_dll_shutdown() {
     if (base_dll) {
         minhook_shutdown();
 
-        pDirectInput8Create = NULL;
-        pDllCanUnloadNow = NULL;
-        pDllGetClassObject = NULL;
-        pDllRegisterServer = NULL;
-        pDllUnregisterServer = NULL;
-        pGetdfDIJoystick = NULL;
+        pDirectInput8Create = nullptr;
+        pDllCanUnloadNow = nullptr;
+        pDllGetClassObject = nullptr;
+        pDllRegisterServer = nullptr;
+        pDllUnregisterServer = nullptr;
+        pGetdfDIJoystick = nullptr;
         FreeLibrary(base_dll);
-        base_dll = NULL;
+        base_dll = nullptr;
     }
+}
+
+// Definition using DEFINE_PROC macro
+_Check_return_
+STDAPI DirectInput8Create(
+    HINSTANCE hinst,
+    DWORD dwVersion,
+    const IID& riidltf,
+    LPVOID* ppvOut,
+    LPUNKNOWN punkOuter
+) {
+    HRESULT ret = pDirectInput8Create ?
+        pDirectInput8Create(hinst, dwVersion, riidltf, ppvOut, punkOuter) :
+        E_NOTIMPL;
+
+    if (ret == S_OK) {
+        new MyIDirectInput8A(
+            (IDirectInput8A**)ppvOut
+        );
+    }
+    return ret;
+}
+
+
+
+_Check_return_
+STDAPI DllGetClassObject(
+    _In_ REFCLSID rclsid,
+    _In_ REFIID riid,
+    _Outptr_ LPVOID FAR* ppv
+) {
+    if (pDllGetClassObject) {
+        return pDllGetClassObject(rclsid, riid, ppv);
+    }
+    else {
+        return E_NOTIMPL;
+    }
+}
+
+// Definition
+_Check_return_
+STDAPI DllCanUnloadNow(void) {
+    if (pDllCanUnloadNow) {
+        return pDllCanUnloadNow();
+    }
+    else {
+        return S_FALSE;
+    }
+}
+
+
+
+DEFINE_PROC(HRESULT, DllRegisterServer, ()) {
+    if (pDllRegisterServer) {
+        return pDllRegisterServer();
+    }
+    else {
+        return E_NOTIMPL;
+    }
+}
+
+DEFINE_PROC(HRESULT, DllUnregisterServer, ()) {
+    if (pDllUnregisterServer) {
+        return pDllUnregisterServer();
+    }
+    else {
+        return E_NOTIMPL;
+    }
+}
+
+DEFINE_PROC(LPCDIDATAFORMAT, GetdfDIJoystick, (void)) {
+    if (pGetdfDIJoystick) {
+        return pGetdfDIJoystick();
+    }
+    else {
+        return nullptr;
+    }
+}
+
+DEFINE_PROC(HRESULT, D3D9CreateDeviceAndSwapChain, (
+    D3DPRESENT_PARAMETERS* pPresentParams,
+    IDirect3DSwapChain9** ppSwapChain,
+    IDirect3DDevice9** ppDevice
+    )) {
+    HRESULT ret = E_NOTIMPL;
+    if (pD3D9 && pD3D9Device) {
+        ret = pD3D9Device->CreateAdditionalSwapChain(pPresentParams, ppSwapChain);
+        if (ret == S_OK) {
+            auto sc = new MyIDXGISwapChain(pPresentParams, *ppSwapChain, *ppDevice);
+            default_config->hwnd = pPresentParams->hDeviceWindow;
+            sc->set_overlay(default_overlay);
+            sc->set_config(default_config);
+        }
+    }
+    return ret;
 }

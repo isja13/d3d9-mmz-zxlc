@@ -1,27 +1,39 @@
 #ifndef MAIN_H
 #define MAIN_H
 
-#define ENABLE_LOGGER 1
-// Filters currently do not apply to FMVs and certain menu items
 #define ENABLE_SLANG_SHADER 1
-// Custom display resolution seems to work now
-// Custom render resoluton separate from display still broken
-#define ENABLE_CUSTOM_RESOLUTION 2
 
 #define UNICODE
 #define _UNICODE
 #define WIN32_LEAN_AND_MEAN
+
+#ifndef _WIN32_WINNT
 #define _WIN32_WINNT _WIN32_WINNT_VISTA
+#endif
+
 #define WINVER _WIN32_WINNT
+
 #include <windows.h>
 #include <tchar.h>
-#include <d3d10.h>
+#include <d3d9.h>
 #include <dinput.h>
+
+#ifdef UNICODE
+//#define _T(x) L ## x
+#else
+//#define _T(x) x
+#endif
+
+#ifdef UNICODE
+#define BASE_DLL_NAME L"\\dinput8.dll"
+#else
+#define BASE_DLL_NAME "\\dinput8.dll"
+#endif
+
 #define VK_VALUE_BEGIN 1
 #define VK_VALUE_END ((BYTE)-1)
 
 #include <stdlib.h>
-
 #include <iostream>
 #include <sstream>
 #include <iomanip>
@@ -44,29 +56,53 @@
 #include <atomic>
 #include <regex>
 
+#include "custom_query_type.h"
+
 #define CONCAT_BASE(a, b) a ## b
 #define CONCAT(a, b) CONCAT_BASE(a, b)
+
+#ifndef STRINGIFY
 #define STRINGIFY_BASE(n) #n
 #define STRINGIFY(n) STRINGIFY_BASE(n)
+#endif
+
+#ifndef LSTRINGIFY
+#define LSTRINGIFY(x) L ## #x
+#endif
 
 struct _tstring_view_icmp {
-    bool operator()(const _tstring_view &a, const _tstring_view &b) const;
+    bool operator()(const _tstring_view& a, const _tstring_view& b) const;
 };
-#define MAP_ENUM(t) std::map<_tstring_view, t, _tstring_view_icmp>
-#define MAP_ENUM_ITEM(n) { _T(#n), n }
-#define ENUM_MAP(t) std::map<t, std::string>
-#define ENUM_MAP_ITEM(n) { n, #n }
-#define ENUM_CLASS_MAP_ITEM(n) { ENUM_CLASS::n, #n }
-#define FLAG_MAP(t) std::vector<std::pair<t, std::string>>
 
-#define MOD_NAME "MMXLC Interpolation Mod"
+#define MAP_ENUM(t) std::map<_tstring_view, t, _tstring_view_icmp>
+
+#define MAP_ENUM_ITEM(n) { _T(#n), n }
+
+#ifndef ENUM_MAP
+#define ENUM_MAP(t) std::map<t, std::string>
+#endif
+
+#ifndef ENUM_MAP_ITEM
+#define ENUM_MAP_ITEM(n) { n, #n }
+#endif
+
+#define ENUM_CLASS_MAP_ITEM(n) { ENUM_CLASS::n, #n }
+
+#ifndef FLAG_MAP
+#define FLAG_MAP(t) std::vector<std::pair<t, std::string>>
+#endif
+
+#define MOD_NAME "MMZZXLC FilterHack"
 #define LOG_FILE_NAME _T("interp-mod.log")
-#define INI_FILE_NAME _T("interp-mod.ini")
-#define BASE_DLL_NAME _T("\\dinput8.dll")
+#define INI_FILE_NAME _T("filter-hack.ini")
+
+class Overlay;
+//class CustomQueryType;
+
 
 class cs_wrapper {
     class Impl;
-    Impl *impl;
+    Impl* impl;
 
 public:
     cs_wrapper();
@@ -76,4 +112,4 @@ public:
     void end_cs();
 };
 
-#endif
+#endif // MAIN_H

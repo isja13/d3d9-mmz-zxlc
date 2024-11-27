@@ -1,78 +1,102 @@
 #include "main.h"
+#include "overlay.h"
+#include "dinput8_dll.h"
+#include "conf.h"
+#include "ini.h"
+#include "globals.h"
+#include "dxgiswapchain.h"
+#include "log.h"
+#include "../RetroArch/retroarch.h"
+#include "../RetroArch/RetroArch/retroarch.h"
+//#include "../RetroArch/RetroArch/retroarch.c"
+#include <algorithm> // Ensure this is included for std::min
 
-bool _tstring_view_icmp::operator()(const _tstring_view &a, const _tstring_view &b) const {
-    int ret = _tcsnicmp(a.data(), b.data(), std::min(a.size(), b.size()));
+
+static Logger dummy_logger(_T("dummy.log")); // Ensure the constructor matches
+
+// Declare default_logger, default_config, default_overlay, and default_ini
+//Logger* default_logger = &dummy_logger;
+//Config* default_config = nullptr;
+//OverlayPtr default_overlay; // Use OverlayPtr instead of Overlay*
+//Ini* default_ini = nullptr;
+
+inline size_t min_size_t(size_t a, size_t b) {
+    return (a < b) ? a : b;
+}
+
+bool _tstring_view_icmp::operator()(const _tstring_view& a, const _tstring_view& b) const {
+    int ret = _tcsnicmp(a.data(), b.data(), static_cast<int>(min_size_t(a.size(), b.size())));
     if (ret == 0) return a.size() < b.size();
     return ret < 0;
 }
 
-#include "dinput8_dll.h"
-#include "overlay.h"
-#include "conf.h"
-#include "ini.h"
-#include "log.h"
-#include "../RetroArch/retroarch.h"
-
-static Logger dummy_logger = {NULL};
-BOOL WINAPI DllMain(
-    HINSTANCE hinstDLL, // handle to DLL module
-    DWORD fdwReason,    // reason for calling function
-    LPVOID lpReserved   // reserved
-) {
-    // Perform actions based on the reason for calling.
-    switch( fdwReason )
-    {
-        case DLL_PROCESS_ATTACH:
-        // Initialize once for each new process.
-        // Return FALSE to fail DLL load.
-        {
-            DisableThreadLibraryCalls(hinstDLL);
+BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpReserved) {
+    switch (fdwReason) {
+    case DLL_PROCESS_ATTACH:
+        DisableThreadLibraryCalls(hinstDLL);
+        try {
             my_config_init();
 
             default_overlay = new Overlay();
-            default_overlay(MOD_NAME " loaded");
+            default_overlay->push_text(MOD_NAME " loaded");
 
             default_config = new Config();
-
-            default_ini = new Ini(INI_FILE_NAME);
-            default_ini->set_overlay(default_overlay);
-            default_ini->set_config(default_config);
-
-            default_logger = new Logger(LOG_FILE_NAME);
-            default_logger->set_overlay(default_overlay);
-            default_logger->set_config(default_config);
+            default_ini = new Ini(INI_FILE_NAME, default_overlay, default_config);
+            default_logger = new Logger(LOG_FILE_NAME, default_config, default_overlay);
 
             base_dll_init(hinstDLL);
-            break;
         }
+        catch (const std::exception& e) {
+            if (default_logger) {
+                default_logger->log_error("Exception during DLL_PROCESS_ATTACH: ", e.what());
+            }
+            return FALSE;
+        }
+        catch (...) {
+            if (default_logger) {
+                default_logger->log_error("Unknown exception during DLL_PROCESS_ATTACH");
+            }
+            return FALSE;
+        }
+        break;
 
-        case DLL_THREAD_ATTACH:
-        // Do thread-specific initialization.
-            break;
+    case DLL_THREAD_ATTACH:
+        break;
 
-        case DLL_THREAD_DETACH:
-        // Do thread-specific cleanup.
-            break;
+    case DLL_THREAD_DETACH:
+        break;
 
-        case DLL_PROCESS_DETACH:
-        // Perform any necessary cleanup.
-        {
-            // May need to add synchronizations
-            // in this block.
+    case DLL_PROCESS_DETACH:
+        try {
             base_dll_shutdown();
 
             delete default_logger;
             default_logger = &dummy_logger;
+
             delete default_ini;
+            default_ini = nullptr;
             delete default_config;
+            default_config = nullptr;
             delete default_overlay;
+            default_overlay = nullptr;
 
             my_config_free();
-            break;
         }
+        catch (const std::exception& e) {
+            if (dummy_logger.get_started()) {
+                dummy_logger.log_error("Exception during DLL_PROCESS_DETACH: ", e.what());
+            }
+        }
+        catch (...) {
+            if (dummy_logger.get_started()) {
+                dummy_logger.log_error("Unknown exception during DLL_PROCESS_DETACH");
+            }
+        }
+        break;
     }
-    return TRUE; // Successful DLL_PROCESS_ATTACH.
+    return TRUE;
 }
+
 
 class cs_wrapper::Impl {
     CRITICAL_SECTION cs;
@@ -82,6 +106,7 @@ class cs_wrapper::Impl {
 cs_wrapper::cs_wrapper() : impl(new Impl()) {
     InitializeCriticalSection(&impl->cs);
 }
+
 cs_wrapper::~cs_wrapper() {
     DeleteCriticalSection(&impl->cs);
     delete impl;

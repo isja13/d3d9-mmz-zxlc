@@ -1,534 +1,254 @@
 #include "dxgiswapchain.h"
-#include "d3d10device.h"
+#include <d3d9.h>
+#include <d3dx9.h>
+#include "d3d9device.h"
 #include "overlay.h"
-#include "d3d10device.h"
-#include "d3d10texture2d.h"
-#include "d3d10rendertargetview.h"
-#include "d3d10shaderresourceview.h"
-#include "d3d10depthstencilview.h"
+#include "d3d9texture2d.h"
+#include "d3d9rendertargetview.h"
+#include "d3d9shaderresourceview.h"
+#include "d3d9depthstencilview.h"
 #include "conf.h"
 #include "log.h"
 #include "tex.h"
 #include "unknown_impl.h"
+#include "FormatConversion.h"
+#include "d3d9types.h"
+#include "present_parameters_storage.h"
+#include "globals.h" // Include the globals header
 
-#define LOGGER default_logger
+// Define logging macros
+//#define LOGGER default_logger
 #define LOG_MFUN(_, ...) LOG_MFUN_DEF(MyIDXGISwapChain, ## __VA_ARGS__)
+//#define default_logger(...) printf(__VA_ARGS__)
 
-extern UINT64 xorshift128p();
+DXGI_FORMAT ConvertD3DFormatToDXGIFormat(D3DFORMAT format) {
+    switch (format) {
+    case D3DFMT_R8G8B8: return DXGI_FORMAT_B8G8R8X8_UNORM;
+    case D3DFMT_A8R8G8B8: return DXGI_FORMAT_B8G8R8A8_UNORM;
+    case D3DFMT_X8R8G8B8: return DXGI_FORMAT_B8G8R8X8_UNORM;
+    case D3DFMT_R5G6B5: return DXGI_FORMAT_B5G6R5_UNORM;
+    case D3DFMT_X1R5G5B5: return DXGI_FORMAT_B5G5R5A1_UNORM;
+    case D3DFMT_A1R5G5B5: return DXGI_FORMAT_B5G5R5A1_UNORM;
+    case D3DFMT_R3G3B2: return DXGI_FORMAT_R8G8_UNORM;
+    case D3DFMT_A8: return DXGI_FORMAT_A8_UNORM;
+    case D3DFMT_A8R3G3B2: return DXGI_FORMAT_B8G8R8A8_UNORM;
+    default: return DXGI_FORMAT_UNKNOWN;
+    }
+}
 
-class MyIDXGISwapChain::Impl {
-    friend class MyIDXGISwapChain;
+D3DFORMAT ConvertDXGIFormatToD3DFormat(DXGI_FORMAT format) {
+    switch (format) {
+    case DXGI_FORMAT_R8G8B8A8_UNORM: return D3DFMT_A8R8G8B8;
+    default: return D3DFMT_UNKNOWN;
+    }
+}
 
-    IUNKNOWN_PRIV(IDXGISwapChain)
+DXGI_FORMAT D3DToDXGIFormat(D3DFORMAT format) {
+    switch (format) {
+    case D3DFMT_A8R8G8B8: return DXGI_FORMAT_R8G8B8A8_UNORM;
+    case D3DFMT_X8R8G8B8: return DXGI_FORMAT_B8G8R8X8_UNORM;
+    case D3DFMT_R5G6B5: return DXGI_FORMAT_B5G6R5_UNORM;
+    case D3DFMT_A1R5G5B5: return DXGI_FORMAT_B5G5R5A1_UNORM;
+    case D3DFMT_A8: return DXGI_FORMAT_A8_UNORM;
+    default: return DXGI_FORMAT_UNKNOWN;
+    }
+}
 
-    UINT cached_width = 0;
-    UINT cached_height = 0;
-    UINT cached_flags = 0;
-    UINT cached_buffer_count = 0;
-    DXGI_FORMAT cached_format = DXGI_FORMAT_UNKNOWN;
-    bool is_config_display = false;
-    UINT render_3d_width = 0;
-    UINT render_3d_height = 0;
-    UINT display_width = 0;
-    UINT display_height = 0;
-    UINT display_flags = 0;
-    UINT display_buffer_count = 0;
-    DXGI_FORMAT display_format = DXGI_FORMAT_UNKNOWN;
-    bool render_3d_updated = false;
-    bool display_updated = false;
-    OverlayPtr overlay = {NULL};
-    Config *config = NULL;
-    MyID3D10Device *device = NULL;
-    std::unordered_set<MyID3D10Texture2D *> bbs;
-    DXGI_SWAP_CHAIN_DESC desc = {};
+D3DFORMAT DXGIToD3DFormat(DXGI_FORMAT format) {
+    switch (format) {
+    case DXGI_FORMAT_R8G8B8A8_UNORM: return D3DFMT_A8R8G8B8;
+    case DXGI_FORMAT_B8G8R8X8_UNORM: return D3DFMT_X8R8G8B8;
+    case DXGI_FORMAT_B5G6R5_UNORM: return D3DFMT_R5G6B5;
+    case DXGI_FORMAT_B5G5R5A1_UNORM: return D3DFMT_A1R5G5B5;
+    case DXGI_FORMAT_A8_UNORM: return D3DFMT_A8;
+    default: return D3DFMT_UNKNOWN;
+    }
+}
 
-    HRESULT my_resize_buffers(
-        UINT width,
-        UINT height,
-        UINT flags,
-        UINT buffer_count,
-        DXGI_FORMAT format
-    ) {
-        HRESULT ret;
-        if (overlay) {
-            ret = overlay->resize_buffers(
-                buffer_count,
-                width,
-                height,
-                format,
-                flags
-            );
-        } else {
-            ret = inner->ResizeBuffers(
-                buffer_count,
-                width,
-                height,
-                format,
-                flags
-            );
-        }
-        if (ret == S_OK) {
-            inner->GetDesc(&desc);
-            device->resize_buffers(width, height);
-        }
+//class BackBuffer {
+//public:
+ //   MyIDXGISwapChain*& get_sc() { static MyIDXGISwapChain* sc = nullptr; return sc; }
+  //  void Release() {}
+//};
+
+MyIDXGISwapChain::Impl::Impl(D3DPRESENT_PARAMETERS* pSwapChainDesc, IDirect3DSwapChain9* inner, IDirect3DDevice9* device)
+    : inner(inner),
+    device(new MyID3D9Device(device)),
+    overlay(nullptr),
+    cached_width(pSwapChainDesc->BackBufferWidth),
+    cached_height(pSwapChainDesc->BackBufferHeight),
+    cached_flags(pSwapChainDesc->Flags),
+    cached_buffer_count(pSwapChainDesc->BackBufferCount),
+    cached_format(pSwapChainDesc->BackBufferFormat),
+    display_width(0),
+    display_height(0),
+    desc(*pSwapChainDesc),
+    bbs() // Initialize bbs
+{
+    this->device->AddRef();
+}
+
+MyIDXGISwapChain::Impl::~Impl() {
+    for (auto b : bbs) {
+        b->get_sc() = nullptr;
+        b->Release();
+    }
+    bbs.clear();
+
+    if (overlay)
+        overlay->set_display(nullptr, nullptr, nullptr);
+
+    if (device)
+        device->Release();
+}
+
+HRESULT MyIDXGISwapChain::Impl::my_resize_buffers(UINT BufferCount, UINT Width, UINT Height, UINT SwapChainFlags, D3DFORMAT NewFormat) {
+    HRESULT ret;
+
+    cached_width = Width;
+    cached_height = Height;
+    cached_flags = SwapChainFlags;
+    cached_buffer_count = BufferCount;
+    cached_format = NewFormat;
+
+    if (overlay) {
+        D3DFORMAT d3dFormat = NewFormat;
+        ret = overlay->resize_buffers(BufferCount, Width, Height, d3dFormat, SwapChainFlags);
+    }
+    else {
+        D3DPRESENT_PARAMETERS modifiable_desc = desc;
+        modifiable_desc.BackBufferWidth = Width;
+        modifiable_desc.BackBufferHeight = Height;
+        modifiable_desc.BackBufferFormat = NewFormat;
+        modifiable_desc.BackBufferCount = BufferCount;
+        modifiable_desc.MultiSampleType = D3DMULTISAMPLE_NONE;
+        modifiable_desc.SwapEffect = D3DSWAPEFFECT_DISCARD;
+        modifiable_desc.hDeviceWindow = this->desc.hDeviceWindow;
+        modifiable_desc.Windowed = this->desc.Windowed;
+        modifiable_desc.EnableAutoDepthStencil = FALSE;
+        modifiable_desc.Flags = SwapChainFlags;
+        ret = device->Reset(&modifiable_desc);
+
+        // Store the presentation parameters
+        PresentParametersStorage::SetPresentParameters(modifiable_desc);
+    }
+
+    if (ret != S_OK) {
+        LOG_MFUN(_, "ResizeBuffers failed with error code: %ld\n", ret);
         return ret;
     }
 
-    Impl(
-        DXGI_SWAP_CHAIN_DESC *pSwapChainDesc,
-        IDXGISwapChain **inner,
-        ID3D10Device **device
-    ) :
-        IUNKNOWN_INIT(*inner),
-        cached_width(pSwapChainDesc->BufferDesc.Width),
-        cached_height(pSwapChainDesc->BufferDesc.Height),
-        cached_flags(pSwapChainDesc->Flags),
-        cached_buffer_count(pSwapChainDesc->BufferCount),
-        cached_format(pSwapChainDesc->BufferDesc.Format),
-        device(new MyID3D10Device(
-            device,
-            cached_width,
-            cached_height
-        )),
-        desc(*pSwapChainDesc)
-    {
-        this->device->AddRef();
-    }
+    PresentParametersStorage::GetPresentParameters(&desc);
+    cached_width = desc.BackBufferWidth;
+    cached_height = desc.BackBufferHeight;
+    cached_format = desc.BackBufferFormat;
 
-    ~Impl() {
-        for (auto b : bbs) { b->get_sc() = NULL; }
-        if (overlay) overlay->set_display(NULL, NULL, NULL);
-        if (device) device->Release();
-    }
+    device->resize_buffers(Width, Height);
 
-    void update_config() {
-if constexpr (ENABLE_CUSTOM_RESOLUTION) {
-        if (config && config->render_display_updated) {
-            config->begin_config();
-            if (
-                render_3d_width != config->render_3d_width ||
-                render_3d_height != config->render_3d_height
-            ) {
-                render_3d_width = config->render_3d_width;
-                render_3d_height = config->render_3d_height;
-                render_3d_updated = true;
-            }
-            if (
-                display_width != config->display_width ||
-                display_height != config->display_height
-            ) {
-                display_width = config->display_width;
-                display_height = config->display_height;
-                display_updated = true;
-            }
-            config->render_display_updated = false;
-            config->end_config();
-        }
-
-        if (
-            (display_updated || is_config_display) &&
-            (
-                display_flags != cached_flags ||
-                display_buffer_count != cached_buffer_count ||
-                display_format != cached_format
-            )
-        ) {
-            display_flags = cached_flags;
-            display_buffer_count = cached_buffer_count;
-            display_format = cached_format;
-            display_updated = true;
-        }
-
-        if (display_updated) {
-            device->get_inner()->OMSetRenderTargets(0, NULL, NULL);
-
-            for (auto bb : bbs) {
-                for (MyID3D10RenderTargetView *rtv : bb->get_rtvs()) {
-                    if (auto &v = rtv->get_inner()) {
-                        cached_rtvs_map.erase(v);
-                        v->Release();
-                        v = NULL;
-                    }
-                }
-                for (MyID3D10ShaderResourceView *srv : bb->get_srvs()) {
-                    if (auto &v = srv->get_inner()) {
-                        cached_srvs_map.erase(v);
-                        v->Release();
-                        v = NULL;
-                    }
-                }
-                for (MyID3D10DepthStencilView *dsv : bb->get_dsvs()) {
-                    if (auto &v = dsv->get_inner()) {
-                        cached_dsvs_map.erase(v);
-                        v->Release();
-                        v = NULL;
-                    }
-                }
-                if (auto &b = bb->get_inner()) {
-                    b->Release();
-                    b = NULL;
-                }
-            }
-
-            if (display_width && display_height) {
-                HRESULT ret = my_resize_buffers(
-                    display_width,
-                    display_height,
-                    display_flags,
-                    display_buffer_count,
-                    display_format
-                );
-                if (ret == S_OK) {
-                    is_config_display = true;
-                    overlay(
-                        "Display resolution set to ",
-                        std::to_string(display_width),
-                        "x",
-                        std::to_string(display_height)
-                    );
-                } else {
-                    overlay(
-                        "Failed to set display resolution to ",
-                        std::to_string(display_width),
-                        "x",
-                        std::to_string(display_height)
-                    );
-                }
-            } else {
-                my_resize_buffers(
-                    cached_width,
-                    cached_height,
-                    cached_flags,
-                    cached_buffer_count,
-                    cached_format
-                );
-                overlay(
-                    "Restoring display resolution to ",
-                    std::to_string(cached_width),
-                    "x",
-                    std::to_string(cached_height)
-                );
-                is_config_display = false;
-            }
-
-            for (auto bb : bbs) {
-                auto &b = bb->get_inner();
-                auto d = device->get_inner();
-                inner->GetBuffer(
-                    0,
-                    IID_ID3D10Texture2D,
-                    (void **)&b
-                );
-                for (MyID3D10RenderTargetView *rtv : bb->get_rtvs()) {
-                    auto &v = rtv->get_inner();
-                    d->CreateRenderTargetView(
-                        b,
-                        &rtv->get_desc(),
-                        &v
-                    );
-                    cached_rtvs_map.emplace(v, rtv);
-                }
-                for (MyID3D10ShaderResourceView *srv : bb->get_srvs()) {
-                    auto &v = srv->get_inner();
-                    d->CreateShaderResourceView(
-                        b,
-                        &srv->get_desc(),
-                        &v
-                    );
-                    cached_srvs_map.emplace(v, srv);
-                }
-                for (MyID3D10DepthStencilView *dsv : bb->get_dsvs()) {
-                    auto &v = dsv->get_inner();
-                    d->CreateDepthStencilView(
-                        b,
-                        &dsv->get_desc(),
-                        &v
-                    );
-                    cached_dsvs_map.emplace(v, dsv);
-                }
-                b->GetDesc(&bb->get_desc());
-            }
-
-            display_updated = false;
-        }
-
-        if (render_3d_updated) {
-            device->resize_render_3d(render_3d_width, render_3d_height);
-            render_3d_updated = false;
-        }
-}
-    }
-
-    void set_overlay(MyIDXGISwapChain *sc, Overlay *overlay) {
-        this->overlay = {overlay};
-        if (device) device->set_overlay(overlay);
-        if (overlay) {
-            if (display_width && display_height) {
-                auto desc = this->desc;
-                desc.BufferDesc.Width = display_width;
-                desc.BufferDesc.Height = display_height;
-                overlay->set_display(&desc, sc, device);
-            } else {
-                overlay->set_display(&desc, sc, device);
-            }
-        }
-    }
-
-    void set_config(Config *config) {
-        this->config = config;
-        update_config();
-        if (device) device->set_config(config);
-    }
-};
-
-IUNKNOWN_IMPL(MyIDXGISwapChain, IDXGISwapChain)
-
-void MyIDXGISwapChain::set_overlay(Overlay *overlay) {
-    impl->set_overlay(this, overlay);
-}
-
-void MyIDXGISwapChain::set_config(Config *config) {
-    impl->set_config(config);
-}
-
-std::unordered_set<MyID3D10Texture2D *> &MyIDXGISwapChain::get_bbs() {
-    return impl->bbs;
-}
-
-MyIDXGISwapChain::MyIDXGISwapChain(
-    DXGI_SWAP_CHAIN_DESC *pSwapChainDesc,
-    IDXGISwapChain **inner,
-    ID3D10Device **device
-) :
-    impl(new Impl(pSwapChainDesc, inner, device))
-{
-    LOG_MFUN(_,
-        LOG_ARG(*inner),
-        LOG_ARG(*device)
-    );
-    *inner = this;
-}
-
-MyIDXGISwapChain::~MyIDXGISwapChain() {
-    LOG_MFUN();
-    delete impl;
-}
-
-HRESULT STDMETHODCALLTYPE MyIDXGISwapChain::Present(
-    UINT sync_interval,
-    UINT flags
-) {
-    HRESULT ret = 0;
-    impl->device->present();
-    if (impl->overlay) {
-        ret = impl->overlay->present(
-            sync_interval,
-            flags
-        );
-    } else {
-        ret = impl->inner->Present(
-            sync_interval,
-            flags
-        );
-    }
-    LOG_MFUN(_, ret);
-    LOGGER->next_frame();
-    impl->update_config();
-    return ret;
-}
-
-HRESULT STDMETHODCALLTYPE MyIDXGISwapChain::GetBuffer(
-    UINT buffer_idx,
-    REFIID riid,
-    void **surface
-) {
-    if (riid != IID_ID3D10Texture2D) return E_NOTIMPL;
-    HRESULT ret = impl->inner->GetBuffer(
-        buffer_idx,
-        riid,
-        surface
-    );
-    if (ret == S_OK) {
-        LOG_MFUN(_,
-            LOG_ARG(buffer_idx),
-            LOG_ARG(riid),
-            LOG_ARG(*surface),
-            ret
-        );
-        D3D10_TEXTURE2D_DESC desc;
-        ((ID3D10Texture2D *)*surface)->GetDesc(&desc);
-        D3D10_TEXTURE2D_DESC desc_orig = {
-            .Width = impl->cached_width,
-            .Height = impl->cached_height
-        };
-        auto bb = new MyID3D10Texture2D(
-            (ID3D10Texture2D **)surface,
-            &desc_orig,
-            xorshift128p(),
-            this
-        );
-        bb->get_desc() = desc;
-        impl->bbs.insert(bb);
-    } else {
-        LOG_MFUN(_,
-            LOG_ARG(buffer_idx),
-            LOG_ARG(riid),
-            ret
-        );
-    }
-    return ret;
-}
-
-HRESULT STDMETHODCALLTYPE MyIDXGISwapChain::SetFullscreenState(
-    WINBOOL fullscreen,
-    IDXGIOutput *target
-) {
-    LOG_MFUN();
-    return impl->inner->SetFullscreenState(
-        fullscreen,
-        target
-    );
-}
-
-HRESULT STDMETHODCALLTYPE MyIDXGISwapChain::GetFullscreenState(
-    WINBOOL *fullscreen,
-    IDXGIOutput **target
-) {
-    LOG_MFUN();
-    return impl->inner->GetFullscreenState(
-        fullscreen,
-        target
-    );
-}
-
-HRESULT STDMETHODCALLTYPE MyIDXGISwapChain::GetDesc(
-    DXGI_SWAP_CHAIN_DESC *desc
-) {
-    LOG_MFUN();
-    if (desc) {
-        *desc = impl->desc;
-        desc->BufferDesc.Width = impl->cached_width;
-        desc->BufferDesc.Height = impl->cached_height;
-    }
     return S_OK;
 }
 
-HRESULT STDMETHODCALLTYPE MyIDXGISwapChain::ResizeBuffers(
-    UINT buffer_count,
-    UINT width,
-    UINT height,
-    DXGI_FORMAT format,
-    UINT flags
-) {
-    impl->cached_width = width;
-    impl->cached_height = height;
-    impl->cached_flags = flags;
-    impl->cached_buffer_count = buffer_count;
-    impl->cached_format = format;
-    impl->update_config();
-    HRESULT ret = impl->is_config_display ?
-        S_OK :
-        impl->my_resize_buffers(width, height, flags, buffer_count, format);
-    if (ret == S_OK) { impl->device->resize_orig_buffers(width, height); }
-    LOG_MFUN(_,
-        LOG_ARG(buffer_count),
-        LOG_ARG(width),
-        LOG_ARG(height),
-        LOG_ARG(format),
-        LOG_ARG(flags),
-        ret
-    );
+void MyIDXGISwapChain::Impl::set_overlay(MyIDXGISwapChain* sc, Overlay* overlay) {
+    this->overlay = overlay;
 
-    return ret;
+    if (device && overlay)
+        device->set_overlay(overlay);
+
+    if (overlay) {
+        if (display_width && display_height) {
+            D3DPRESENT_PARAMETERS desc = this->desc;
+            desc.BackBufferWidth = display_width;
+            desc.BackBufferHeight = display_height;
+            overlay->set_display(&desc, sc, device);
+        }
+        else {
+            overlay->set_display(&desc, sc, device);
+        }
+    }
 }
 
-HRESULT STDMETHODCALLTYPE MyIDXGISwapChain::ResizeTarget(
-    const DXGI_MODE_DESC *target_mode_desc
-) {
-    LOG_MFUN();
-    return impl->inner->ResizeTarget(target_mode_desc);
+MyIDXGISwapChain::MyIDXGISwapChain(D3DPRESENT_PARAMETERS* pSwapChainDesc, IDirect3DSwapChain9* inner, IDirect3DDevice9* device) {
+    impl = new Impl(pSwapChainDesc, inner, device);
 }
 
-HRESULT STDMETHODCALLTYPE MyIDXGISwapChain::GetContainingOutput(
-    IDXGIOutput **output
-) {
-    LOG_MFUN();
-    return impl->inner->GetContainingOutput(output);
+MyIDXGISwapChain::~MyIDXGISwapChain() {
+    delete impl;
 }
 
-HRESULT STDMETHODCALLTYPE MyIDXGISwapChain::GetFrameStatistics(
-    DXGI_FRAME_STATISTICS *stats
-) {
-    LOG_MFUN();
-    return impl->inner->GetFrameStatistics(stats);
+HRESULT MyIDXGISwapChain::SetFullscreenState(BOOL Fullscreen, IDXGIOutput* pTarget) {
+    return S_OK;
 }
 
-HRESULT STDMETHODCALLTYPE MyIDXGISwapChain::GetLastPresentCount(
-    UINT *last_present_count
-) {
-    LOG_MFUN();
-    return impl->inner->GetLastPresentCount(last_present_count);
+HRESULT MyIDXGISwapChain::GetFullscreenState(BOOL* pFullscreen, IDXGIOutput** ppTarget) {
+    *pFullscreen = FALSE;
+    *ppTarget = nullptr;
+    return S_OK;
 }
 
-// IDXGIDeviceSubObject
-
-HRESULT STDMETHODCALLTYPE MyIDXGISwapChain::GetDevice(
-    REFIID riid,
-    void **device
-) {
-    LOG_MFUN();
-    return impl->inner->GetDevice(
-        riid,
-        device
-    );
+HRESULT MyIDXGISwapChain::ResizeBuffers(UINT BufferCount, UINT Width, UINT Height, D3DFORMAT NewFormat, UINT SwapChainFlags) {
+    return impl->my_resize_buffers(BufferCount, Width, Height, SwapChainFlags, NewFormat);
 }
 
-// IDXGIObject
-
-HRESULT STDMETHODCALLTYPE MyIDXGISwapChain::SetPrivateData(
-    REFGUID guid,
-    UINT data_size,
-    const void *data
-) {
-    LOG_MFUN();
-    return impl->inner->SetPrivateData(
-        guid,
-        data_size,
-        data
-    );
+HRESULT MyIDXGISwapChain::ResizeTarget(const DXGI_MODE_DESC* pNewTargetParameters) {
+    return S_OK;
 }
 
-HRESULT STDMETHODCALLTYPE MyIDXGISwapChain::SetPrivateDataInterface(
-    REFGUID guid,
-    const IUnknown *object
-) {
-    LOG_MFUN();
-    return impl->inner->SetPrivateDataInterface(
-        guid,
-        object
-    );
+HRESULT MyIDXGISwapChain::GetContainingOutput(IDXGIOutput** ppOutput) {
+    return E_NOTIMPL;
 }
 
-HRESULT STDMETHODCALLTYPE MyIDXGISwapChain::GetPrivateData(
-    REFGUID guid,
-    UINT *data_size,
-    void *data
-) {
-    LOG_MFUN();
-    return impl->inner->GetPrivateData(
-        guid,
-        data_size,
-        data
-    );
+HRESULT MyIDXGISwapChain::GetFrameStatistics(DXGI_FRAME_STATISTICS* pStats) {
+    return E_NOTIMPL;
 }
 
-HRESULT STDMETHODCALLTYPE MyIDXGISwapChain::GetParent(
-    REFIID riid,
-    void **parent
-) {
-    LOG_MFUN();
-    return impl->inner->GetParent(
-        riid,
-        parent
-    );
+HRESULT MyIDXGISwapChain::GetLastPresentCount(UINT* pLastPresentCount) {
+    return E_NOTIMPL;
+}
+
+HRESULT MyIDXGISwapChain::GetBackBuffer(UINT Buffer, D3DBACKBUFFER_TYPE Type, IDirect3DSurface9** ppSurface) {
+    return impl->inner->GetBackBuffer(Buffer, Type, ppSurface);
+}
+
+HRESULT MyIDXGISwapChain::GetBuffer(UINT Buffer, REFIID riid, void** ppSurface) {
+    if (riid == __uuidof(IDirect3DSurface9)) {
+        return impl->inner->GetBackBuffer(Buffer, D3DBACKBUFFER_TYPE_MONO, reinterpret_cast<IDirect3DSurface9**>(ppSurface));
+    }
+    return E_NOINTERFACE;
+}
+
+ULONG MyIDXGISwapChain::AddRef() {
+    return InterlockedIncrement(&ref_count);
+}
+
+ULONG MyIDXGISwapChain::Release() {
+    ULONG count = InterlockedDecrement(&ref_count);
+    if (count == 0) {
+        delete this;
+    }
+    return count;
+}
+
+HRESULT MyIDXGISwapChain::QueryInterface(REFIID riid, void** ppv) {
+    if (riid == IID_IUnknown) {
+        *ppv = static_cast<IUnknown*>(this);
+    }
+    else {
+        *ppv = nullptr;
+        return E_NOINTERFACE;
+    }
+    AddRef();
+    return S_OK;
+}
+
+void MyIDXGISwapChain::set_overlay(Overlay* overlay) {
+    impl->set_overlay(this, overlay);
+}
+
+void MyIDXGISwapChain::set_config(Config* config) {
+    // Set the global default_config
+    ::default_config = config;
+}
+
+std::vector<BackBuffer*>& MyIDXGISwapChain::get_bbs() {
+    return impl->bbs;
 }

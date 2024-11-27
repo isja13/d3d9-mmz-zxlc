@@ -1,34 +1,31 @@
 #include "directinput8a.h"
 #include "unknown_impl.h"
 #include "log.h"
+#include "globals.h"
 
-#define LOGGER default_logger
+//#define LOGGER default_logger
 #define LOG_MFUN(_, ...) LOG_MFUN_DEF(MyIDirectInput8A, ## __VA_ARGS__)
 
 class MyIDirectInput8A::Impl {
     friend class MyIDirectInput8A;
 
-    IUNKNOWN_PRIV(IDirectInput8A)
+    IUNKNOWN_PRIV(IDirectInput8A)  // Use the macro to declare inner
 
-    Impl(
-        IDirectInput8A **inner
-    ) :
-        IUNKNOWN_INIT(*inner)
+public:
+    Impl(IDirectInput8A** inner) :
+        inner(*inner)
     {}
 
     ~Impl() {}
 };
 
+// Use the macro to define the necessary functions
 IUNKNOWN_IMPL(MyIDirectInput8A, IDirectInput8A)
 
-MyIDirectInput8A::MyIDirectInput8A(
-    IDirectInput8A **inner
-) :
+MyIDirectInput8A::MyIDirectInput8A(IDirectInput8A** inner) :
     impl(new Impl(inner))
 {
-    LOG_MFUN(_,
-        LOG_ARG(*inner)
-    );
+    LOG_MFUN(_, LOG_ARG(*inner));
     *inner = this;
 }
 
@@ -37,11 +34,19 @@ MyIDirectInput8A::~MyIDirectInput8A() {
     delete impl;
 }
 
-// IDirectInput8A
+//IDirectInput8A*& MyIDirectInput8A::get_inner_ref() {
+  //  return impl->inner;
+//}
+
+//const IDirectInput8A* MyIDirectInput8A::get_inner_ptr() const {
+  //  return impl->inner;
+//}
+
+// IDirectInput8A implementation
 
 HRESULT STDMETHODCALLTYPE MyIDirectInput8A::CreateDevice(
     REFGUID rguid,
-    LPDIRECTINPUTDEVICE8A *lplpDirectInputDevice,
+    LPDIRECTINPUTDEVICE8A* lplpDirectInputDevice,
     LPUNKNOWN pUnkOuter
 ) {
     LOG_MFUN();
@@ -64,11 +69,11 @@ HRESULT STDMETHODCALLTYPE MyIDirectInput8A::EnumDevices(
         pvRef,
         dwFlags
     );
-    LOG_MFUN(_,
-        LOG_ARG_TYPE(dwDevType, DI8DEVCLASS_Logger),
-        LOG_ARG_TYPE(dwFlags, DIEDFL_Logger),
-        ret
-    );
+    LOG_MFUN(_;
+    LOG_ARG_TYPE(dwDevType, DI8DEVCLASS_Logger);
+    LOG_ARG_TYPE(dwFlags, DIEDFL_Logger);
+    ret
+        );
     return ret;
 }
 
@@ -147,3 +152,4 @@ HRESULT STDMETHODCALLTYPE MyIDirectInput8A::ConfigureDevices(
         pvRefData
     );
 }
+

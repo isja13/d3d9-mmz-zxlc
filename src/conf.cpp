@@ -1,7 +1,8 @@
 #include "conf.h"
+#include "globals.h"
 
 class Config::Impl {
-    cs_wrapper cs;
+    cs_wrapper cs; // Assuming cs_wrapper is a critical section wrapper for thread safety
     friend class Config;
 };
 
@@ -15,6 +16,8 @@ void Config::end_config() {
 
 Config::Config() : impl(new Impl()) {}
 
-Config::~Config() { delete impl; }
+Config::~Config() {
+    delete impl;
+}
 
-Config *default_config;
+//Config* default_config = nullptr;

@@ -1,16 +1,16 @@
 #include "overlay.h"
 #include "dxgiswapchain.h"
-#include "d3d10device.h"
-
+#include "d3d9device.h"
 #include "../imgui/imgui.h"
-#include "../imgui/examples/imgui_impl_dx10.h"
+#include "../imgui/examples/imgui_impl_dx9.h"
+#include "../imgui/examples/imgui_impl_win32.h"
+
+#include "globals.h"
 
 #define TEXT_DURATION 2.5
 
 namespace {
-
-cs_wrapper gui_cs;
-
+    cs_wrapper gui_cs;
 }
 
 class Overlay::Impl {
@@ -22,9 +22,9 @@ class Overlay::Impl {
     };
     std::deque<Text> texts;
 
-    void push_text_base(std::string &&s) {
+    void push_text_base(std::string&& s) {
         std::cerr << s << std::endl;
-        texts.emplace_back(Text{std::move(s)});
+        texts.emplace_back(Text{ std::move(s) });
     }
     cs_wrapper texts_cs;
 
@@ -37,33 +37,32 @@ class Overlay::Impl {
     }
 
     void reset_texts_timings() {
-        for (Text &text : texts) text.time = 0;
+        for (Text& text : texts) text.time = 0;
     }
 
     HWND hwnd = NULL;
-    MyID3D10Device *pDevice = NULL;
-    MyIDXGISwapChain *pSwapChain = NULL;
-    ID3D10RenderTargetView *rtv = NULL;
-    ImGuiContext *imgui_context = NULL;
-    ImGuiIO *io = NULL;
+    MyID3D9Device* pDevice = NULL;
+    MyIDXGISwapChain* pSwapChain = NULL;
+    IDirect3DSurface9* rtv = NULL;
+    ImGuiContext* imgui_context = NULL;
+    ImGuiIO* io = NULL;
     UINT64 time = 0;
     UINT64 ticks_per_second = 0;
     ImVec2 display_size = {};
 
     void create_render_target() {
         if (!rtv) {
-            ID3D10Texture2D* pBackBuffer = NULL;
-            pSwapChain->get_inner()->GetBuffer(0, __uuidof(ID3D10Texture2D), (LPVOID*)&pBackBuffer);
+            IDirect3DSurface9* pBackBuffer = NULL;
+            pSwapChain->GetBackBuffer(0, D3DBACKBUFFER_TYPE_MONO, &pBackBuffer);
             if (pBackBuffer) {
-                pDevice->get_inner()->CreateRenderTargetView(pBackBuffer, NULL, &rtv);
-                pBackBuffer->Release();
+                rtv = pBackBuffer; // No need to create render target view separately in DX9
             }
         }
-        ImGui_ImplDX10_CreateDeviceObjects();
+        ImGui_ImplDX9_CreateDeviceObjects();
     }
 
     void cleanup_render_target() {
-        ImGui_ImplDX10_InvalidateDeviceObjects();
+        ImGui_ImplDX9_InvalidateDeviceObjects();
         if (rtv) {
             rtv->Release();
             rtv = NULL;
@@ -75,18 +74,14 @@ class Overlay::Impl {
     }
 
     void set_display(
-        DXGI_SWAP_CHAIN_DESC *pSwapChainDesc,
-        MyIDXGISwapChain *pSwapChain,
-        MyID3D10Device *pDevice
+        D3DPRESENT_PARAMETERS* pSwapChainDesc,
+        MyIDXGISwapChain* pSwapChain,
+        MyID3D9Device* pDevice  // Changed from MyIDirect3DDevice9 to MyID3D9Device
     ) {
         reset_display();
-        if (!(
-            pSwapChainDesc &&
-            pSwapChain &&
-            pDevice
-        )) return;
+        if (!(pSwapChainDesc && pSwapChain && pDevice)) return;
 
-        hwnd = pSwapChainDesc->OutputWindow;
+        hwnd = pSwapChainDesc->hDeviceWindow;
         this->pDevice = pDevice;
         this->pSwapChain = pSwapChain;
 
@@ -96,13 +91,13 @@ class Overlay::Impl {
         imgui_context = ImGui::CreateContext();
         io = &ImGui::GetIO();
         io->IniFilename = NULL;
-        ImGui_ImplDX10_Init(pDevice->get_inner());
+        ImGui_ImplDX9_Init(pDevice->get_inner()); // Ensure get_inner() is defined in MyID3D9Device
         ImGui::StyleColorsClassic();
-        ImGuiStyle *style = &ImGui::GetStyle();
+        ImGuiStyle* style = &ImGui::GetStyle();
         style->WindowBorderSize = 0;
         set_display_size(ImVec2(
-            pSwapChainDesc->BufferDesc.Width,
-            pSwapChainDesc->BufferDesc.Height
+            pSwapChainDesc->BackBufferWidth,
+            pSwapChainDesc->BackBufferHeight
         ));
 
         create_render_target();
@@ -112,7 +107,7 @@ class Overlay::Impl {
         cleanup_render_target();
 
         set_display_size({});
-        ImGui_ImplDX10_Shutdown();
+        ImGui_ImplDX9_Shutdown();
         io = NULL;
         if (imgui_context) {
             ImGui::DestroyContext(imgui_context);
@@ -133,7 +128,7 @@ class Overlay::Impl {
     }
 
     Impl() {
-        QueryPerformanceFrequency((LARGE_INTEGER *)&ticks_per_second);
+        QueryPerformanceFrequency((LARGE_INTEGER*)&ticks_per_second);
     }
 
     ~Impl() {
@@ -144,18 +139,16 @@ class Overlay::Impl {
         UINT buffer_count,
         UINT width,
         UINT height,
-        DXGI_FORMAT format,
+        D3DFORMAT format,
         UINT flags
     ) {
         reset_texts_timings();
         cleanup_render_target();
-        HRESULT ret = pSwapChain->get_inner()->ResizeBuffers(
-            buffer_count,
-            width,
-            height,
-            format,
-            flags
-        );
+        HRESULT ret = pSwapChain->GetBuffer(
+            0,
+            IID_IDirect3DSurface9,
+            (void**)&rtv
+        ); // Ensure the correct method is used
         if (ret == S_OK) {
             set_display_size(ImVec2(width, height));
             create_render_target();
@@ -167,25 +160,22 @@ class Overlay::Impl {
         UINT SyncInterval,
         UINT Flags
     ) {
-        if (!(
-            texts.size() &&
-            rtv &&
-            gui_cs.try_begin_cs()
-        )) {
+        if (!(texts.size() && rtv && gui_cs.try_begin_cs())) {
             time = 0;
-            return ;
+            return;
         }
 
         ImGui::SetCurrentContext(imgui_context);
-        ImGui_ImplDX10_NewFrame();
+        ImGui_ImplDX9_NewFrame();
 
         if (!time || hwnd != GetForegroundWindow()) {
             reset_texts_timings();
-            QueryPerformanceCounter((LARGE_INTEGER *)&time);
-            io->DeltaTime = 1.0f/60.0f;
-        } else {
-            UINT64 current_time;
-            QueryPerformanceCounter((LARGE_INTEGER *)&current_time);
+            QueryPerformanceCounter((LARGE_INTEGER*)&time);
+            io->DeltaTime = 1.0f / 60.0f;
+        }
+        else {
+            UINT64 current_time = 0; // Initialize current_time
+            QueryPerformanceCounter((LARGE_INTEGER*)&current_time);
             io->DeltaTime = (float)(current_time - time) / ticks_per_second;
             time = current_time;
         }
@@ -199,21 +189,17 @@ class Overlay::Impl {
             NULL,
             ImGuiWindowFlags_NoTitleBar
         );
-        while (
-            texts.size() &&
-            texts.front().time &&
-            time - texts.front().time > ticks_per_second * TEXT_DURATION
-        ) {
+        while (texts.size() && texts.front().time && time - texts.front().time > ticks_per_second * TEXT_DURATION) {
             texts.pop_front();
         }
-        for (Text &text : texts) {
+        for (Text& text : texts) {
             if (!text.time) text.time = time;
             ImGui::TextUnformatted(text.text.c_str());
         }
         ImGui::End();
         ImGui::Render();
-        pDevice->get_inner()->OMSetRenderTargets(1, &rtv, NULL);
-        ImGui_ImplDX10_RenderDrawData(ImGui::GetDrawData());
+        pDevice->get_inner()->SetRenderTarget(0, rtv);
+        ImGui_ImplDX9_RenderDrawData(ImGui::GetDrawData());
 
         gui_cs.end_cs();
     }
@@ -226,16 +212,12 @@ Overlay::~Overlay() {
 }
 
 void Overlay::set_display(
-    DXGI_SWAP_CHAIN_DESC *pSwapChainDesc,
-    MyIDXGISwapChain *pSwapChain,
-    MyID3D10Device *pDevice
+    D3DPRESENT_PARAMETERS* pSwapChainDesc,
+    MyIDXGISwapChain* pSwapChain,
+    MyID3D9Device* pDevice
 ) {
     impl->begin_text();
-    impl->set_display(
-        pSwapChainDesc,
-        pSwapChain,
-        pDevice
-    );
+    impl->set_display(pSwapChainDesc, pSwapChain, pDevice);
     impl->end_text();
 }
 
@@ -246,32 +228,32 @@ HRESULT Overlay::present(
     impl->begin_text();
     impl->present(SyncInterval, Flags);
     impl->end_text();
-    return impl->pSwapChain->get_inner()->Present(SyncInterval, Flags);
+    return impl->pSwapChain->get_inner()->Present(NULL, NULL, NULL, NULL, Flags);
 }
 
 HRESULT Overlay::resize_buffers(
     UINT buffer_count,
     UINT width,
     UINT height,
-    DXGI_FORMAT format,
+    D3DFORMAT format,
     UINT flags
 ) {
     impl->begin_text();
-    HRESULT ret = impl->resize_buffers(
-        buffer_count,
-        width,
-        height,
-        format,
-        flags
-    );
+    HRESULT ret = impl->resize_buffers(buffer_count, width, height, format, flags);
     impl->end_text();
     return ret;
 }
 
-void Overlay::push_text_base(std::string &&s) {
+void Overlay::push_text_base(std::string&& s) {
     impl->begin_text();
     impl->push_text_base(std::move(s));
     impl->end_text();
 }
 
-OverlayPtr default_overlay;
+void Overlay::set_log_message(const std::string& message) {
+    impl->begin_text();
+    impl->push_text_base(std::string(message)); // Ensure correct type
+    impl->end_text();
+}
+
+//OverlayPtr default_overlay;
