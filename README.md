@@ -1,4 +1,4 @@
-# Mega Man X Legacy Collection `d3d10.dll` wrapper mod
+# Mega Man X Legacy Collection `d3d9.dll` wrapper mod
 
 Features:
 
