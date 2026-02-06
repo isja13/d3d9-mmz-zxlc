@@ -1,0 +1,127 @@
+OriginalSize - DS = 256×192, GBA = 240×160 (manual)
+
+SourceSize - IDirect3DTexture9* (src.tex or whatever texture bound)
+
+OutputSize - IDirect3DSurface9* RT (GetDesc) // 256x192/512x384 usual default, must be per-pass object.
+
+///////////////////////////////////////////////////////////////////////////
+
+MATCH TIER :: INPUT/OUTPUT
+
+A) .SLANG STRING SOURCE
+B) .HLSL VS/PS
+C) .SEMANTICS (index, name, offset, size, mask, indices)
+D) .CONSTANT TABLES // names/registers 
+
+//////////////////////////////////////////////////////////////////////////
+
+slang-shaders/handheld/lcd3x.slang SEMANTICS MAP:
+
+FBO: INPUT → INPUT
+
+No internal scaling (sx=0 sy=0 abs=0)
+
+Filter: NEAREST
+
+Wrap: BORDER
+
+pass_semantics_t::textures:                
+Index	Binding	Stage Mask	Notes
+0	2	0x02	Source texture (PS-visible)          (Only TEXSEM[0] matters for this shader
+1	0	0x00	unused                              Bound as sampler2D Source in fragment stage) 
+2	0	0x02294CA0	internal / unused
+3	393227	0x01	internal / unused
+4	655364	0x1C2	internal / unused
+5	393222	0x00	unused
+
+//cbuff                                                             (global_MVP in HLSL
+Name	Offset	Size	Type                                        vertex shader bound)
+MVP	0	64 bytes	mat4
+
+//Param          
+brighten_scanlines	52	4	float
+brighten_lcd	        56	4	float
+SourceSize	        0	16	vec4
+
+//HLSL VS
+Name	Reg	Bytes
+gl_HalfPixel	c4	16
+global_MVP	c0–c3	64
+
+//PS
+Source	                        s0	sampler              (SourceSize → params_SourceSize → PS c0
+params_SourceSize	        c0	16                    PS c0–c3 must match vec4 layout exactly) 
+params_brighten_lcd      	c2	4
+params_brighten_scanlines	c1	4                           //vTexCoord * SourceSize.xy
+
+///////////////////////////////////////////////////////////////////////
+
+SLANG → HLSL TRANSLATION TABLE (lcd3x)
+
+layout(push_constant) uniform Push { … } params; ------------------> cbuffer Push { … }
+
+vec4 SourceSize; ------------------> float4 params_SourceSize : packoffset(c0);
+
+vec4 OriginalSize; ------------------> float4 params_OriginalSize : packoffset(c1);
+
+vec4 OutputSize; ------------------> float4 params_OutputSize : packoffset(c2);
+
+uint FrameCount; ------------------> uint params_FrameCount : packoffset(c3);
+
+float brighten_scanlines; ------------------> float params_brighten_scanlines : packoffset(c3.y);
+
+float brighten_lcd; ------------------> float params_brighten_lcd : packoffset(c3.z);
+
+#pragma parameter brighten_scanlines … ------------------> (RetroArch UI only, not emitted to HLSL)
+
+#define brighten_scanlines params.brighten_scanlines ------------------> params_brighten_scanlines
+
+#pragma parameter brighten_lcd … ------------------> (RetroArch UI only)
+
+#define brighten_lcd params.brighten_lcd ------------------> params_brighten_lcd
+
+layout(std140, set=0, binding=0) uniform UBO { mat4 MVP; } global; ------------------> cbuffer UBO : register(b0) { row_major float4x4 global_MVP : packoffset(c0); }
+
+vec2 omega = vec2(pi) * vec2(2.0) * params.SourceSize.xy; ------------------> static float2 omega; omega = 6.28318548.xx * params_SourceSize.xy;
+
+const vec3 offsets = vec3(pi) * vec3(½, ½−⅔, ½−4/3); ------------------> float3(1.57079637, -0.52359879, -2.61799383)
+
+layout(location=0) in vec4 Position; ------------------> float4 Position : TEXCOORD0;
+
+layout(location=1) in vec2 TexCoord; ------------------> float2 TexCoord : TEXCOORD1;
+
+layout(location=0) out vec2 vTexCoord; ------------------> float2 vTexCoord : TEXCOORD0;
+
+gl_Position ------------------> static float4 gl_Position;
+
+gl_Position = global.MVP * Position; ------------------> gl_Position = mul(Position, global_MVP);
+
+vTexCoord = TexCoord; ------------------> vTexCoord = TexCoord;
+
+(no SLANG equivalent) ------------------> uniform float4 gl_HalfPixel;
+
+(no SLANG equivalent) ------------------> gl_Position.x -= gl_HalfPixel.x * gl_Position.w;
+
+(no SLANG equivalent) ------------------> gl_Position.y += gl_HalfPixel.y * gl_Position.w;
+
+layout(location=0) in vec2 vTexCoord; ------------------> float2 vTexCoord : TEXCOORD0;
+
+layout(location=0) out vec4 FragColor; ------------------> float4 FragColor : COLOR0;
+
+layout(set=0, binding=2) uniform sampler2D Source; ------------------> uniform sampler2D Source; // bound to s0
+
+texture(Source, vTexCoord) ------------------> tex2D(Source, vTexCoord)
+
+vec2 angle = vTexCoord * omega; ------------------> float2 angle = vTexCoord * omega;
+
+(brighten_scanlines + sin(angle.y)) / (brighten_scanlines + 1) ------------------> (params_brighten_scanlines + sin(angle.y)) / (params_brighten_scanlines + 1.0f)
+
+sin(angle.x + offsets) ------------------> sin(angle.x.xxx + float3(1.57079637, -0.52359879, -2.61799383))
+
+vec3 color = yfactor * xfactors * res; ------------------> float3 color = (xfactors * yfactor) * res;
+
+FragColor = vec4(color, 1.0); ------------------> FragColor = float4(color.x, color.y, color.z, 1.0f);
+
+void main() (vertex) ------------------> void vert_main() + SPIRV_Cross_Output main(SPIRV_Cross_Input)
+
+void main() (fragment) ------------------> void frag_main() + SPIRV_Cross_Output main(SPIRV_Cross_Input)

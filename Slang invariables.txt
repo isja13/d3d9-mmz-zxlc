@@ -1,0 +1,96 @@
+INVARIANT 1:
+SLANG: layout(set=0, binding=2) uniform sampler2D Source;
+Semantics: TEXSEM[0] bind=2 stage_mask=0x02
+D3D9: ends up as sampler s0 in PS constant table (Source regset=3 reg=0)
+binding=2 is “Source”  (Translation layer rule: Always bind Source texture to the sampler that the compiled PS expects for “Source” (usually s0), and treat TEXSEM[0]/bind=2 as the authoritative semantic “this pass needs Source”.)
+ 
+INVARIANT 2:
+SLANG UBO: mat4 MVP;
+Semantics UBO: bind=0 has MVP at offset 0 size 64
+VS CT: global_MVP at c0–c3 (regset=2 reg=0 count=4 bytes=64)
+VS must get a valid global_MVP every pass.
+
+INVARIANT 3:
+uniform float4 gl_HalfPixel;
+gl_Position.x -= gl_HalfPixel.x * gl_Position.w;
+gl_Position.y += gl_HalfPixel.y * gl_Position.w;
+supplycorrect gl_HalfPixel for current viewport/target mapping
+
+//////////////////////////////////////////////////////////////////////////////////////////
+
+VARIANT A: 
+lcd3x: SourceSize is in Push (params_SourceSize c0)
+crt-lottes: SourceSize/OutputSize are in UBO as global_* (packoffset c4/c6 etc), while tons of scalars are in Push
+xbrz-freescale: SourceSize + OutputSize are both in Push
+Cannot assume SourceSize=//must resolve per constant table
+
+VARIANT B: 
+Lottes uses global.OutputSize.zw as a divider:
+Mask(vTexCoord.xy / global.OutputSize.zw * 1.000001)
+treat size vectors as:
+.xy = (W, H)
+.zw = (1/W, 1/H)
+unless HLSL proves otherwise.
+lcd3x/xbrz - params_SourceSize.zw * float2(x,y)
+SourceSize.zw/OutputSize.zw must be inverse.
+
+VARIANT C: 
+lcd3x: FBO INPUT→INPUT no scaling
+crt-lottes: FBO INPUT→INPUT no scaling
+xbrz-freescale: FBO VIEWPORT→VIEWPORT sx=1 sy=1
+intermediate RT? - OutputSize=RT.
+VIEWPORT? - OutputSize= VP target.
+
+VARIANT D: 
+CRT-Lottes ~ global_OutputSize reg=13/params_bloomAmount reg=13
+treat CT entries as: (name → register set → base reg → count → size/class/type)
+
+//////////////////////////////////////////////////////////////////////////////////////////
+
+RESOLVE 1:
+Inputs:
+pass FBO mode (INPUT/VIEWPORT)
+internal scaling (sx/sy/abs)
+actual source texture dims (SourceSize.xy) from IDirect3DTexture9::GetLevelDesc(0)
+actual pass RT dims (OutputSize.xy) from IDirect3DSurface9::GetDesc
+Outputs:
+SourceSize = (srcW, srcH, 1/srcW, 1/srcH)
+OutputSize = (rtW, rtH, 1/rtW, 1/rtH)
+OriginalSize = (contentW, contentH, 1/contentW, 1/contentH) (manual DS/GBA)
+plus any “pass viewport rectangle” used by gl_HalfPixel
+
+RESOLVE 2: 
+Inputs:
+semantics dump (UBO uniforms + PUSH uniforms names/offsets/sizes)
+compiled constant tables (VS+PS)
+Outputs:
+per-stage list of “set this uniform by name using this data blob”
+with the rule: don’t assume push vs ubo; use whichever name exists in the CT etc.
+
+RESOLVE 3: 
+Inputs:
+pass_semantics_t textures list (binding, stage_mask)
+PS constant table sampler names
+Outputs:
+map “semantic binding 2” → sampler register for Source (usually s0)
+map additional textures (history, feedback, LUTs) similarly
+
+RESOLVE 4: 
+Inputs:
+quad system (own quad/game stream)
+shader’s expected VS input signature (TEXCOORD0 position, TEXCOORD1 uv)
+pass viewport + target dims
+Outputs:
+consistent clip-space quad + UVs that match RetroArch convention
+correct gl_HalfPixel for D3D9 texel-center correction
+
+////////////////////////////////////////////////////////////////////////////////////////
+
+TL ARCHITECTURE:
+Per-pass RT dimension discovery (OutputSize.xy/zw)
+Per-source texture dimension discovery (SourceSize.xy/zw)
+OriginalSize injection (manual / content-defined)
+Name-based uniform assignment for both stages (VS/PS)
+Sampler binding that follows the compiled shader’s expectation (not assumptions)
+gl_HalfPixel computed per pass for current viewport/RT mapping
+No reliance on CT “reg numbers” as a single namespace (write by handle/name + size)
