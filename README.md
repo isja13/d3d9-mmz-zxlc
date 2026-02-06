@@ -47,7 +47,7 @@ Close ups:
 
 What has been successfully implemented is base Linear filtering, the ui overlay, and a partial logging system salvaged out of the pre-existing class via console readout and Debug Viewer alongside game selection state machine logic, and the integrity of .ini configurable settings // 
 
-Constants table, invariants, and example HLSL included in src folder.
+Constants table, invariants, and example HLSL included in master branch.
 
 
 ## Building from source
