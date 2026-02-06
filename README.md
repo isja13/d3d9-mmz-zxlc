@@ -14,7 +14,7 @@ This project has made major steps in correcting that discrepancy through:
 1. A complete Device level d3d9 wrapper (much like the X collection)
 2. Modifications through that wrapper to the d3d9 video driver
 3. A slang preset parser implementation that uses Retroarch's headers
-4. A SPRIV-Cross compiling implementation that builds presets out of HLSL Vertex and Pixel shader outputs
+4. A SPIRV-Cross compiling implementation that builds presets out of HLSL Vertex and Pixel shader outputs
 5. A translation layer for relaying semantics and interpreting the shader bytecode in the source application
 
 The result is that a single pass shader can be loaded, compiled, built, and applied to show a video output that is recognizable as the game, with the specific shader applied, but not without graphical glitches. Such conventions as bevels and scanlines appear, but certain phase, chroma, and subpixel effects are currently either not aligned, blown way out of proportion, or completely flipped on the bottom half of the quad. This has to do with D3D9's lack of similar features to future DX versions such as Cbuffers, sampler states, and geometry shaders, so it produces alongside mismatched texels, what can only be described as a "triangle of death."
