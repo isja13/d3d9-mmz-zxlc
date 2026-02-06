@@ -26,7 +26,7 @@ Solutions explored to try and remedy this have included, but are not limited to:
 3. Forcing alignment with half pixel/MVP
 4. Drawing the entire quad as a single Trianglelist instead of strip
 
-However, no solution could be found by time of writing. If this could be solve, multipass implementation would not be too far off, but as it stands, this is a hard block in the road as far as Retroarch to DX9 slang shader compatibility goes. It seems to be engine/API level convention limited, and likely cannot be remedied without serious architectural brute forcing.
+However, no solution could be found by time of writing. If this could be solved, multipass implementation would not be too far off, but as it stands, this is a hard block in the road as far as Retroarch to DX9 slang shader compatibility goes. It seems to be engine/API level convention limited, and likely cannot be remedied without serious architectural brute forcing.
 
 ![zx lcd leg](https://github.com/user-attachments/assets/5e2c49a2-15c3-4ae4-bf09-047a4201dfbe)
 
