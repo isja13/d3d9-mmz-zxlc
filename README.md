@@ -6,7 +6,7 @@ Features:
 
 Download from [here](https://github.com/isja13/d3d9-mmz-zxlc).
 
-Modified from xzn's MegaMan X Collection d3d10 wrapper. There are many challenges in porting over from that game to this. First off is that a majority of Capcom collections in the series are essentially using emulation, whilst this collection seems to have built the games for Direct X 9 with individual sprite objects and the like. The game window still exists as a texture object in the API space, but there is more to effecting the visuals than that.
+Modified from xzn's MegaMan X Collection d3d10 wrapper. There are many challenges in porting over from that game to this. First off is that a majority of Capcom collections in the series are essentially using emulation, whilst this collection seems to have built the games for Direct X 9 with individual sprite objects and the like. The game window still exists as a texture object in the API space, but there is more to affecting the visuals than that.
 
 The code here has been entirely ported to Direct X 9 and solved for any immediate game-breaking bugs, however...the shader system in the X collection mod was entirely ported over from the leading open-source emulation frontend RetroArch, which DOES NOT support Direct X 9 natively for it's 'slang' shading preset pipeline.
 
@@ -17,7 +17,7 @@ This project has made major steps in correcting that discrepancy through:
 4. A SPRIV-Cross compiling implementation that builds presets out of HLSL Vertex and Pixel shader outputs
 5. A translation layer for relaying semantics and interpreting the shader bytecode in the source application
 
-The result is that a single pass shader can be loaded, compiled, built, compiled, and applied to show a video output that is recognizable as the game, with the specific shader applied, but not without graphical glitches. Such conventions as bevels and scanlines appear, but certain phase, chroma, and subpixel effects are currently either not aligned, blown way out of proportion, or completely flipped on the bottom half of the quad. This has to do with D3D9's lack of similar features to future DX versions such as Cbuffers, sampler states, and geometry shaders, so it produces alongside mismatched texels, what can only be described as a "triangle of death."
+The result is that a single pass shader can be loaded, compiled, built, and applied to show a video output that is recognizable as the game, with the specific shader applied, but not without graphical glitches. Such conventions as bevels and scanlines appear, but certain phase, chroma, and subpixel effects are currently either not aligned, blown way out of proportion, or completely flipped on the bottom half of the quad. This has to do with D3D9's lack of similar features to future DX versions such as Cbuffers, sampler states, and geometry shaders, so it produces alongside mismatched texels, what can only be described as a "triangle of death."
 ![20260206112811_1](https://github.com/user-attachments/assets/f3f93bae-649d-47ae-baac-87e21c73ff0b)
 
 Solutions explored to try and remedy this have included, but are not limited to:
