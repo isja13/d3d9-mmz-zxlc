@@ -1,5 +1,5 @@
 # Mega Man Zero/ZX Legacy Collection 'FilterHack' d3d9.dll wrapper mod
-
+!FUNCTIONALLY IDENTICAL TO MAIN BRANCH BUT USES LIBRASHADER INSTEAD OF NATIVE IMPL FOR SHADER LOGIC!
 Features:
 - Adding Support for RetroArch's [slang-shaders](https://github.com/libretro/slang-shaders) into Capcom's Mega Man Zero/ZX Legacy Collection
 - Various graphical improvements and a software interface for effecting the game's rendering pipeline.
@@ -79,7 +79,7 @@ make lto=0 dll
 
 ## Install
 
-Copy `dinput8.dll`, `filter-hack.ini`, and the `slang-shaders\` directory to your game folders, e.g.:
+Copy `dinput8.dll`, `librashader.dll`, `filter-hack.ini`, and the `slang-shaders\` directory to your game folders, e.g.:
 
 - `SteamLibrary\steamapps\common\MMZZXLC`
 
@@ -118,11 +118,11 @@ If all goes well you should now be able to start the game and see the overlay on
 Source code for this mod, without its dependencies, is available under MIT. Dependencies such as `RetroArch` are released under GPL.
 
 - `RetroArch` is needed only for `slang_shader` support.
+- `Librashader` used for `slang_shader` parse/preprocess/compile.
 - `SPIRV-Cross` and `glslang` are used for `slang_shader` support.
-- `HLSLcc` is used for debugging.
 
 Other dependencies are more or less required:
 
-- `minhook` is used for intercepting calls to `d3d10.dll`.
+- `minhook` is used for intercepting calls to `d3d9.dll`.
 - `imgui` is used for overlay display.
 - `smhasher` is technically optional. Currently used for identifying the built-in Type 1 filter shader.
