@@ -1,54 +1,86 @@
-# Mega Man Zero/ZX Legacy Collection 'FilterHack' d3d9.dll wrapper mod
+# Mega Man Zero/ZX Legacy Collection 'FilterMod' d3d9.dll wrapper
+![20260219171737_1](https://github.com/user-attachments/assets/bb76db53-a81f-4fc9-9fe7-77e758625acc)
 
 Features:
-- Adding Support for RetroArch's [slang-shaders](https://github.com/libretro/slang-shaders) into Capcom's Mega Man Zero/ZX Legacy Collection
-- Various graphical improvements and a software interface for effecting the game's rendering pipeline.
+- Adding Native D3D9 Support for RetroArch's [slang-shaders](https://github.com/libretro/slang-shaders) into Capcom's Mega Man Zero/ZX Legacy Collection
+- Forced Integer Scaling to correct pixel art stretching artifacts.
+- Software Interface for effecting the game's rendering pipeline.
+- Various Graphical Improvements
+- Controller/Hotkey Togggles
 
 Download from [here](https://github.com/isja13/d3d9-mmz-zxlc).
 
-Modified from xzn's MegaMan X Collection d3d10 wrapper. There are many challenges in porting over from that game to this. First off is that a majority of Capcom collections in the series are essentially using emulation, whilst this collection seems to have built the games for Direct X 9 with individual sprite objects and the like. The game window still exists as a texture object in the API space, but there is more to affecting the visuals than that.
-
-The code here has been entirely ported to Direct X 9 and solved for any immediate game-breaking bugs, however...the shader system in the X collection mod was entirely ported over from the leading open-source emulation frontend RetroArch, which DOES NOT support Direct X 9 natively for it's 'slang' shading preset pipeline.
-
-This project has made major steps in correcting that discrepancy through:
-1. A complete Device level d3d9 wrapper (much like the X collection)
-2. Modifications through that wrapper to the d3d9 video driver
-3. A slang preset parser implementation that uses Retroarch's headers
-4. A SPIRV-Cross compiling implementation that builds presets out of HLSL Vertex and Pixel shader outputs
-5. A translation layer for relaying semantics and interpreting the shader bytecode in the source application
-
-The result is that a single pass shader can be loaded, compiled, built, and applied to show a video output that is recognizable as the game, with the specific shader applied, but not without graphical glitches. Such conventions as bevels and scanlines appear, but certain phase, chroma, and subpixel effects are currently either not aligned, blown way out of proportion, or completely flipped on the bottom half of the quad. This has to do with D3D9's lack of similar features to future DX versions such as Cbuffers, sampler states, and geometry shaders, so it produces alongside mismatched texels, what can only be described as a "triangle of death."
-![20260206112811_1](https://github.com/user-attachments/assets/f3f93bae-649d-47ae-baac-87e21c73ff0b)
-
-Solutions explored to try and remedy this have included, but are not limited to:
-1. Patching the HLSL to force linearity across sin() functions
-2. Manpulating UV geometry vectors
-3. Forcing alignment with half pixel/MVP
-4. Drawing the entire quad as a single Trianglelist instead of strip
-
-However, no solution could be found by time of writing. If this could be solved, multipass implementation would not be too far off, but as it stands, this is a hard block in the road as far as Retroarch to DX9 slang shader compatibility goes. It seems to be engine/API level convention limited, and likely cannot be remedied without serious architectural brute forcing.
-
-![zx lcd leg](https://github.com/user-attachments/assets/5e2c49a2-15c3-4ae4-bf09-047a4201dfbe)
-
-![crt zx](https://github.com/user-attachments/assets/2eca6115-3aef-4bb6-a1c3-547f4bfc93ef)
-
-vs retroarch native: 
-<img width="2560" height="1440" alt="zx lcd 2" src="https://github.com/user-attachments/assets/c83af612-ee2e-46f3-b2d2-a423105c076b" />
-<img width="2560" height="1440" alt="ZX lcd" src="https://github.com/user-attachments/assets/fb1c0b88-79d8-4a6f-817c-7aae43d31fd0" />
-
-<img width="2560" height="1440" alt="crt lottes" src="https://github.com/user-attachments/assets/20384c8f-55ba-4901-adfb-53f82b2b039a" />
-<img width="2532" height="1170" alt="DCIM_115APPLE_IMG_5690" src="https://github.com/user-attachments/assets/aeaa12fc-f9b3-4c9f-a01f-088e152dc467" />
-
-Close ups: 
-<img width="1297" height="918" alt="crt close" src="https://github.com/user-attachments/assets/b2c77e65-2602-4dfb-a5e4-74b4212556cb" />
-<img width="1903" height="921" alt="LCD close" src="https://github.com/user-attachments/assets/f12e0bb6-0652-43d4-95e3-40c5e84468b7" />
+*Based on xzn's MegaMan X Collection d3d10 wrapper. 
 
 //////////////////
 
-What has been successfully implemented is base Linear filtering, the ui overlay, and a partial logging system salvaged out of the pre-existing class via console readout and Debug Viewer alongside game selection state machine logic, and the integrity of .ini configurable settings // 
+scalefx+lcd3x
+![20260221183613_1](https://github.com/user-attachments/assets/982529c6-fc38-44e5-851f-be4312634895)
 
-Constants table, invariants, and example HLSL included in master branch.
+/////////////////
 
+## Usage
+Choose your presets from the slang_shaders folder and they will build from the path you set in the INI. This runs entirely native D3D9 so whether a shader preset works or not will depend on whether the given .slang code can be compiled to HLSL Shader Model 3.0 bytecode within DirectX 9's register and sampler limitations. Multipass is supported, but extreme crt chains like Royale and Mega Bezel will need to be patched for full compatibility due to reliance on features beyond the API's rendering and semantics contract.
+
+Replaces the in-game Type 1 filter, and can be toggled with either ` or Left Analog Stick by default (ini configurable). Presets will depend on preference but the hierarchy is as such//
+
+-Stock : base game image, with corrected pixel scaling
+![20260223234041_1](https://github.com/user-attachments/assets/ef5fded0-6937-4b87-be46-9717c7662fbf)
+
+-Smoothing : filters that sample the game at a higher resolution to improve edges.
+
+Xbrz-smooth & animated
+![20260214160932_1](https://github.com/user-attachments/assets/755cb529-02ec-40ad-a471-3776cda3bcb7)
+
+Scalefx- just more pixels
+![20260216182940_1](https://github.com/user-attachments/assets/3fc6c824-cbd0-4558-9d2b-512e2c76495d)
+
+-ScreenFX : derives overlay math for subpixel lattice/chroma effects to emulate the look of a specific device, like the LCD handheld consoles the games were designed for, or an old CRT TV.
+
+LCD3x-looks most like GBA
+![lcd slang](https://github.com/user-attachments/assets/0f3dcff9-678a-463d-b6f9-b8e3ad37c79a)
+
+Crt Lottes- old arcade console
+<img width="2560" height="1440" alt="Screenshot 2026-02-15 150419" src="https://github.com/user-attachments/assets/714c85f0-8222-4804-b56d-54e9c502caa1" />
+
+-Customs : combination multipass filters to drastically change the look of the game.
+
+freescale psp - upscaled handheld with backlight saturation
+![20260215192057_1](https://github.com/user-attachments/assets/6c9cede1-95ca-466f-abe8-16fd21506d5c)
+
+Xbrz+LCD3x - upscaled then fed through original resolution filter
+![20260216003453_1](https://github.com/user-attachments/assets/8d76d183-94ed-429a-864b-32a2f37ff026)
+
+////////////////////////////////////////////////////////////////////
+
+As this is not emulation, there are concessions made on a per game basis that certain toggles have been provided to handle based on player preference. In short the game composites an image like this:
+
+1. Opaque black background
+2. Background/Wallpaper Elements
+3. Game Layer
+4. FMV Cutscenes
+5. UI buttons/continue
+6. FX flashes
+
+What this mod does to function is intercept the game draw for Game Layer 3 and feed the original source resolution texture for scaling+shader math which encodes opacity, before rendering the full image at screen scale pixels to the full monitor res backbuffer. This is essentially on top of a 'layer 7' and thus, the remaining composite must be overlayed ontop of this. That means the Black background and clear the game uses for blending, as well as background textures like during the text crawls for Zero 3/4 openings will obscure the game layer text if not encoded with transparency. Hence the first toggle.
+
+Zero 3 opening text crawl edge case:
+![20260219144905_1](https://github.com/user-attachments/assets/15829528-cdfc-4d6e-ae41-0077ffbf0337)
+
+This allows UI and FX elements to blend seamlessly for the most part, and allows cutscenes to play, albeit with an altered visual style.
+
+Cutscene - Transparent
+![20260219171138_1](https://github.com/user-attachments/assets/8ddd01d8-074e-412f-8bc9-13f1534f6113)
+
+Cutscene - Opaque
+![20260223203446_1](https://github.com/user-attachments/assets/f2d5389d-3dbb-49ef-9bbf-a7bcbc0eb158)
+
+It is reccomended for gameplay to be always done in Transparent mode to preserve the FX layer however Cutscene style will be a matter of preference. A Flash kill is also implemented for edge cases in which the FX layer misbehaves under certain configurations. The mod is configured by default to favor gameplay, but this is all configurable in the INI. If all else fails, the entire shader chain can be disabled to temporarily let the game draw through for something like the ZX menu, as well as providing a quick A/B test toggle for the custom shader with the game's own default filter.
+
+High Contrast Edge Detection Blending Shader
+![20260219171627_1](https://github.com/user-attachments/assets/10e03bcf-5960-4d77-a3e2-dee6385cdf03)
+
+///////////////////////////////////////////////////////////////////////////
 
 ## Building from source
 
@@ -79,39 +111,69 @@ make lto=0 dll
 
 ## Install
 
-Copy `dinput8.dll`, `filter-hack.ini`, and the `slang-shaders\` directory to your game folders, e.g.:
+Copy `dinput8.dll`, `filter-mod.ini`, and the `slang-shaders\` directory to your game folders, e.g.:
 
 - `SteamLibrary\steamapps\common\MMZZXLC`
 
 ## Configuration
 
-`filter-hack.ini` contains options to configure the mod.
+`filter-mod.ini` contains options to configure the mod.
 
 ```ini
+[graphics]
+                           _
+slang_shader=slang-shaders/custom/ScaleFx+LCD.slangp
+                           ^   _
+;slang_shader_gba=slang-shaders/custom/Xbrz-Free+LCD3x.slangp
+ slang_shader_ds=slang-shaders/xbrz/xbrz-freescale.slangp
+                               ^
+[Favorites]
+custom/ScaleFx+LCD.slangp
+custom/psp-freescale.slangp
+custom/Xbrz-Free+LCD3x.slangp
+
+[Smoothing]
+custom/scalefx-d3d9.slangp
+xbrz/xbrz-freescale.slangp
+
+[ScreenFx]
+crt/crt-lottes.slangp
+crt/crt-lottes-fast.slangp
+handheld/lcd3x.slangp
+handheld/lcd1x_psp.slangp
+
+;linear=false
+;interp=false
+;enhanced=false
+;custom/Stock.slangp
+
+//------------------------
+
+[toggles]
+hotkey_shader_toggle=OEM_3
+hotkey_flash_kill=1
+hotkey_transparent_cutscenes=2
+
+hotkey_shader_toggle_pad=XINPUT_LS
+hotkey_flash_kill_pad=XINPUT_RS
+hotkey_transparent_cutscenes_pad=XINPUT_RT
+
+[defaults]
+;shader_toggle=TRUE
+;flash_kill=FALSE
+;transparent_cutscenes=TRUE
+
 [logging]
 ; enabled=true
 ; hotkey_toggle=VK_CONTROL+O
 ; hotkey_frame=VK_CONTROL+P
 
-[graphics]
-interp=false
-linear=false
-
-enhanced=true
-
-; slang_shader=slang-shaders/xbrz/xbrz-freescale.slangp
-
- slang_shader=slang-shaders/handheld/lcd3x.slangp
-
-; slang_shader=slang-shaders/crt/crt-lottes.slangp
-
-; slang_shader_gba=slang-shaders/crt/crt-lottes-fast.slangp
-; slang_shader_ds=
 ```
 
 If all goes well you should now be able to start the game and see the overlay on top-left of the screen showing the status of the mod.
+<img width="476" height="87" alt="Overlay" src="https://github.com/user-attachments/assets/42941e01-84ec-4e26-91a0-26486e22f550" />
 
-`filter-hack.ini` can be edited and have its options applied while the game is running.
+`filter-mod.ini` can be edited and have its options applied while the game is running.
 
 ## License
 
@@ -121,8 +183,8 @@ Source code for this mod, without its dependencies, is available under MIT. Depe
 - `SPIRV-Cross` and `glslang` are used for `slang_shader` support.
 - `HLSLcc` is used for debugging.
 
-Other dependencies are more or less required:
+Other dependencies are more or less required: 
 
-- `minhook` is used for intercepting calls to `d3d10.dll`.
+- `minhook` is used for intercepting calls to `d3d9.dll`.
 - `imgui` is used for overlay display.
 - `smhasher` is technically optional. Currently used for identifying the built-in Type 1 filter shader.
