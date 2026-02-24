@@ -78,9 +78,9 @@ Cutscene - Opaque
 It is reccomended for gameplay to be always done in Transparent mode to preserve the FX layer however Cutscene style will be a matter of preference. A Flash kill is also implemented for edge cases in which the FX layer misbehaves under certain configurations. The mod is configured by default to favor gameplay, but this is all configurable in the INI. If all else fails, the entire shader chain can be disabled to temporarily let the game draw through for something like the ZX menu, as well as providing a quick A/B test toggle for the custom shader with the game's own default filter.
 
 Default bindings:
-Shader Toggle : "`"/Left Stick
-Cutscene Toggle : "2"/Right Trigger
-Flash Kill : "1"/ Right Stick
+- Shader Toggle : "`"/Left Stick
+- Cutscene Toggle : "2"/Right Trigger
+- Flash Kill : "1"/ Right Stick
 
 High Contrast Edge Detection Blending Shader
 ![20260219171627_1](https://github.com/user-attachments/assets/10e03bcf-5960-4d77-a3e2-dee6385cdf03)
