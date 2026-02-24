@@ -64,7 +64,7 @@ As this is not emulation, there are concessions made on a per game basis that ce
 
 What this mod does to function is intercept the game draw for Game Layer 3 and feed the original source resolution texture for scaling+shader math which encodes opacity, before rendering the full image at screen scale pixels to the full monitor res backbuffer. This is essentially on top of a 'layer 7' and thus, the remaining composite must be overlayed ontop of this. That means the Black background and clear the game uses for blending, as well as background textures like during the text crawls for Zero 3/4 openings will obscure the game layer text if not encoded with transparency. Hence the first toggle.
 
-Zero 3 opening text crawl edge case:
+Zero 4 opening text crawl edge case:
 ![20260219144905_1](https://github.com/user-attachments/assets/15829528-cdfc-4d6e-ae41-0077ffbf0337)
 
 This allows UI and FX elements to blend seamlessly for the most part, and allows cutscenes to play, albeit with an altered visual style.
